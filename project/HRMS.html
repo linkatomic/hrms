@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=1280, initial-scale=1" />
+  <title>AMRYTT MEDIA · HRMS</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Geist:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="hrms.css" />
+
+  <!-- React -->
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <!-- GSAP + Lenis -->
+  <script src="https://unpkg.com/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script src="https://unpkg.com/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+  <script src="https://unpkg.com/lenis@1.1.13/dist/lenis.min.js"></script>
+
+  <style>
+    @keyframes marqueeScroll {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(-50%); }
+    }
+    .marquee-track { will-change: transform; }
+    html.lenis,html.lenis body{height:auto}
+    .lenis.lenis-smooth{scroll-behavior:auto!important}
+    .lenis.lenis-smooth [data-lenis-prevent]{overscroll-behavior:contain}
+    .lenis.lenis-stopped{overflow:hidden}
+    .lenis.lenis-smooth iframe{pointer-events:none}
+
+    /* loading splash */
+    #boot {
+      position: fixed; inset: 0; background: #0A0A0A; color: #FF6B35;
+      display: grid; place-items: center; z-index: 9999;
+      font-family: "Space Grotesk", system-ui, sans-serif;
+      font-weight: 700; letter-spacing: -0.02em; font-size: 32px;
+      transition: opacity .4s ease;
+    }
+    #boot.gone { opacity: 0; pointer-events: none; }
+    #boot .dot { display: inline-block; width: 10px; height: 10px; background: #FF6B35; margin-left: 8px; animation: blink 1s steps(2) infinite; }
+    @keyframes blink { 50% { opacity: 0; } }
+  </style>
+</head>
+<body>
+  <div id="boot">AMRYTT · HRMS<span class="dot"></span></div>
+  <div id="root"></div>
+
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="icons.jsx"></script>
+  <script type="text/babel" src="tweaks-panel.jsx"></script>
+  <script type="text/babel" src="sidebar.jsx"></script>
+  <script type="text/babel" src="screen-dashboard.jsx"></script>
+  <script type="text/babel" src="screen-checkin.jsx"></script>
+  <script type="text/babel" src="screen-calendar.jsx"></script>
+  <script type="text/babel" src="screen-leave.jsx"></script>
+  <script type="text/babel" src="screen-others.jsx"></script>
+  <script type="text/babel" src="app.jsx"></script>
+
+  <script>
+    // hide boot after first paint
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        const b = document.getElementById("boot");
+        if (b) { b.classList.add("gone"); setTimeout(() => b.remove(), 500); }
+      }, 600);
+    });
+  </script>
+</body>
+</html>
