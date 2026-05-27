@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import Icon from "./Icon";
+import { logout } from "../auth";
 
 const NAV = [
   { group: "Workspace", items: [
@@ -22,7 +23,7 @@ const NAV = [
   ]},
 ];
 
-const Sidebar = ({ route, setRoute, me, role, setRole }) => {
+const Sidebar = ({ route, setRoute, me, role, setRole, onLogout }) => {
   const navRef = useRef(null);
 
   useEffect(() => {
@@ -32,6 +33,11 @@ const Sidebar = ({ route, setRoute, me, role, setRole }) => {
       x: -16, opacity: 0, duration: 0.45, stagger: 0.025, ease: "power3.out",
     });
   }, []);
+
+  const handleLogout = () => {
+    logout();
+    onLogout();
+  };
 
   return (
     <aside className="sidebar">
@@ -44,21 +50,37 @@ const Sidebar = ({ route, setRoute, me, role, setRole }) => {
           </div>
         </div>
 
+        {/* Role pill — manager only can toggle; employees see read-only */}
         <div style={{ display: "flex", gap: 6, marginTop: 14 }}>
-          <button
-            className="brut-btn"
-            onClick={() => setRole(role === "employee" ? "manager" : "employee")}
-            style={{
+          {me.role === "manager" ? (
+            <button
+              className="brut-btn"
+              onClick={() => setRole(role === "employee" ? "manager" : "employee")}
+              style={{
+                flex: 1, padding: "6px 10px", fontSize: 10.5,
+                background: "var(--bg-elev)",
+                borderColor: role === "manager" ? "var(--accent)" : "var(--border)",
+              }}
+              title="Toggle view"
+            >
+              <span className="t-mono" style={{ color: "var(--text-mute)", marginRight: 6 }}>VIEW</span>
+              <span>{role === "manager" ? "MANAGER" : "EMPLOYEE"}</span>
+              <Icon name="arrow-r" size={11} />
+            </button>
+          ) : (
+            <div style={{
               flex: 1, padding: "6px 10px", fontSize: 10.5,
               background: "var(--bg-elev)",
-              borderColor: role === "manager" ? "var(--accent)" : "var(--border)",
-            }}
-            title="Toggle role"
-          >
-            <span className="t-mono" style={{ color: "var(--text-mute)", marginRight: 6 }}>VIEW</span>
-            <span>{role === "manager" ? "MANAGER" : "EMPLOYEE"}</span>
-            <Icon name="arrow-r" size={11} />
-          </button>
+              border: "1.5px solid var(--border)",
+              borderRadius: "var(--r-sm)",
+              fontFamily: "var(--font-display)", fontWeight: 600, letterSpacing: "0.02em",
+              color: "var(--text-dim)",
+              display: "flex", alignItems: "center", gap: 6,
+            }}>
+              <span className="t-mono" style={{ color: "var(--text-mute)" }}>VIEW</span>
+              <span>EMPLOYEE</span>
+            </div>
+          )}
         </div>
       </div>
 
@@ -93,15 +115,21 @@ const Sidebar = ({ route, setRoute, me, role, setRole }) => {
             <div style={{ fontFamily: "var(--font-display)", fontWeight: 600, fontSize: 12.5, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {me.name}
             </div>
-            <div className="t-mono" style={{ fontSize: 10, color: "var(--text-mute)" }}>{me.employeeId}</div>
+            <div className="t-mono" style={{ fontSize: 10, color: "var(--text-mute)" }}>
+              {me.employeeId} · {me.role === "manager" ? "Team Lead" : "Member"}
+            </div>
           </div>
-          <button title="Settings" style={{ color: "var(--text-dim)", padding: 4 }}>
-            <Icon name="settings" size={14} />
+          <button
+            title="Sign out"
+            onClick={handleLogout}
+            style={{ color: "var(--text-dim)", padding: 4 }}
+          >
+            <Icon name="logout" size={14} />
           </button>
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 10, fontFamily: "var(--font-mono)", fontSize: 10, color: "var(--text-mute)" }}>
           <span>v1.4.2</span>
-          <span style={{ marginLeft: "auto" }}>NY · {role === "manager" ? "L4" : "L3"}</span>
+          <span style={{ marginLeft: "auto" }}>IN · {me.role === "manager" ? "L4" : "L3"}</span>
         </div>
       </div>
     </aside>

@@ -644,3 +644,20 @@ html.lenis, html.lenis body { height: auto; }
 .lenis.lenis-smooth { scroll-behavior: auto !important; }
 .lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
 .lenis.lenis-stopped { overflow: hidden; }
+
+/* ── LOGIN ── */
+.input {
+  width: 100%;
+  transition: border-color .15s, box-shadow .15s;
+}
+.input:focus {
+  border-color: var(--accent);
+  box-shadow: 3px 3px 0 var(--accent);
+}
+.login-btn:disabled { cursor: not-allowed; pointer-events: none; }
+
+/* Light mode: login left panel border */
+:root[data-theme="light"] .login-left {
+  border-right-color: #0A0A0A;
+  border-right-width: 2px;
+}

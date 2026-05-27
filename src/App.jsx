@@ -2,7 +2,9 @@ import { useState, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import Lenis from "lenis";
 
-import DATA from "./data";
+import BASE_DATA from "./data";
+import { getSession } from "./auth";
+import Login from "./screens/Login";
 import Sidebar from "./components/Sidebar";
 import Icon from "./components/Icon";
 import Dashboard from "./screens/Dashboard";
@@ -21,28 +23,52 @@ const ROUTE_TITLES = {
   notifications: "Notifications", profile: "Profile",
 };
 
+/** Merge the logged-in user into the DATA object so every screen sees the right "me". */
+function buildData(user) {
+  return {
+    ...BASE_DATA,
+    me: {
+      name:       user.name,
+      role:       user.title,
+      team:       user.team,
+      avatar:     user.avatar,
+      employeeId: user.employeeId,
+      joined:     user.joined,
+      manager:    user.manager,
+      email:      user.email,
+      phone:      user.phone,
+      location:   user.location,
+      pronouns:   user.pronouns,
+    },
+  };
+}
+
 const App = () => {
+  // Auth state — null = not logged in
+  const [user, setUser] = useState(() => getSession());
+
   const [route, setRoute] = useState("dashboard");
-  const [role, setRole] = useState("employee");
+  // Role always starts from what the user's actual role is
+  const [role, setRole]   = useState(() => getSession()?.role ?? "employee");
   const [theme, setTheme] = useState("dark");
   const [clock, setClock] = useState({
-    in: Date.now() - 5.47 * 3600 * 1000,
-    out: null,
-    elapsed: 5.47 * 3600,
+    in:         Date.now() - 5.47 * 3600 * 1000,
+    out:        null,
+    elapsed:    5.47 * 3600,
     breakTotal: 0,
-    onBreak: false,
+    onBreak:    false,
     breakStart: null,
-    breaks: [],
+    breaks:     [],
   });
 
   const lenisRef = useRef(null);
-  const mainRef = useRef(null);
+  const mainRef  = useRef(null);
 
   // Lenis smooth scroll
   useEffect(() => {
     const lenis = new Lenis({
-      duration: 1.2,
-      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      duration:    1.2,
+      easing:      (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
       smoothWheel: true,
       smoothTouch: false,
     });
@@ -68,20 +94,44 @@ const App = () => {
   // Keyboard shortcuts: Alt+1…9
   useEffect(() => {
     const map = { "1": "dashboard", "2": "checkin", "3": "calendar", "4": "leave", "5": "celebrations", "6": "directory", "7": "payroll", "8": "notifications", "9": "profile" };
-    const handler = (e) => {
-      if (e.altKey && map[e.key]) setRoute(map[e.key]);
-    };
+    const handler = (e) => { if (e.altKey && map[e.key]) setRoute(map[e.key]); };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
   }, []);
+
+  // ── Login handler
+  const handleLogin = (loggedInUser) => {
+    setUser(loggedInUser);
+    setRole(loggedInUser.role);
+    setRoute("dashboard");
+  };
+
+  // ── Logout handler
+  const handleLogout = () => {
+    setUser(null);
+    setRole("employee");
+    setRoute("dashboard");
+  };
+
+  // ── Not authenticated → show login
+  if (!user) {
+    return <Login onLogin={handleLogin} />;
+  }
+
+  const DATA = buildData(user);
 
   const Topbar = () => (
     <div className="topbar">
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span className="t-mono tiny" style={{ color: "var(--text-mute)" }}>HRMS</span>
         <span style={{ color: "var(--text-mute)" }}>/</span>
-        <span className="t-mono tiny" style={{ color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>{ROUTE_TITLES[route]}</span>
-        <span className="pill" style={{ marginLeft: 10 }}><span className="dot" style={{ background: "var(--accent)" }}></span>{role.toUpperCase()} VIEW</span>
+        <span className="t-mono tiny" style={{ color: "var(--text-dim)", textTransform: "uppercase", letterSpacing: "0.1em" }}>
+          {ROUTE_TITLES[route]}
+        </span>
+        <span className="pill" style={{ marginLeft: 10 }}>
+          <span className="dot" style={{ background: "var(--accent)" }}></span>
+          {role.toUpperCase()} VIEW
+        </span>
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -90,7 +140,11 @@ const App = () => {
           <input placeholder="Jump to anything…" />
           <span className="kbd">⌘K</span>
         </div>
-        <button className="brut-btn brut-btn--ghost" onClick={() => setRoute("notifications")} style={{ position: "relative", padding: "10px 12px" }}>
+        <button
+          className="brut-btn brut-btn--ghost"
+          onClick={() => setRoute("notifications")}
+          style={{ position: "relative", padding: "10px 12px" }}
+        >
           <Icon name="bell" size={14} />
           <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8, background: "var(--accent)", borderRadius: "50%" }}></span>
         </button>
@@ -108,7 +162,14 @@ const App = () => {
 
   return (
     <div className="app">
-      <Sidebar route={route} setRoute={setRoute} me={DATA.me} role={role} setRole={setRole} />
+      <Sidebar
+        route={route}
+        setRoute={setRoute}
+        me={{ ...DATA.me, role: user.role }}
+        role={role}
+        setRole={user.role === "manager" ? setRole : undefined}
+        onLogout={handleLogout}
+      />
       <main className="main" ref={mainRef}>
         <Topbar />
         <div className="route-pane" key={route + role}>
