@@ -7,6 +7,7 @@ import { getSession } from "./auth";
 import Login from "./screens/Login";
 import Sidebar from "./components/Sidebar";
 import Icon from "./components/Icon";
+import ThemePicker, { THEMES } from "./components/ThemePicker";
 import Dashboard from "./screens/Dashboard";
 import Checkin from "./screens/Checkin";
 import Calendar from "./screens/Calendar";
@@ -50,7 +51,9 @@ const App = () => {
   const [route, setRoute] = useState("dashboard");
   // Role always starts from what the user's actual role is
   const [role, setRole]   = useState(() => getSession()?.role ?? "employee");
-  const [theme, setTheme] = useState("dark");
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem("amrytt_hrms_theme") ?? "dark"; } catch { return "dark"; }
+  });
   const [clock, setClock] = useState({
     in:         Date.now() - 5.47 * 3600 * 1000,
     out:        null,
@@ -80,7 +83,10 @@ const App = () => {
 
   // Theme sync
   useEffect(() => {
+    const themeObj = THEMES.find(t => t.key === theme) ?? THEMES[0];
     document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-theme-type", themeObj.type);
+    try { localStorage.setItem("amrytt_hrms_theme", theme); } catch {}
   }, [theme]);
 
   // Route transition animation
@@ -148,14 +154,7 @@ const App = () => {
           <Icon name="bell" size={14} />
           <span style={{ position: "absolute", top: 4, right: 4, width: 8, height: 8, background: "var(--accent)", borderRadius: "50%" }}></span>
         </button>
-        <button
-          className="brut-btn brut-btn--ghost"
-          onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-          style={{ padding: "10px 12px" }}
-          title="Toggle theme"
-        >
-          <Icon name={theme === "dark" ? "sun" : "moon"} size={14} />
-        </button>
+        <ThemePicker theme={theme} setTheme={setTheme} />
       </div>
     </div>
   );

@@ -56,6 +56,8 @@ const Icon = ({ name, size = 16, className = "" }) => {
       return <svg {...props}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z" /></svg>;
     case "logout":
       return <svg {...props}><path d="M9 21H4V3h5M16 17l5-5-5-5M21 12H9" /></svg>;
+    case "palette":
+      return <svg {...props}><circle cx="12" cy="12" r="9" /><circle cx="9" cy="9.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="9.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="9" cy="14.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="15" cy="14.5" r="1.5" fill="currentColor" stroke="none" /><circle cx="12" cy="16" r="1.5" fill="currentColor" stroke="none" /></svg>;
     case "trend":
       return <svg {...props}><path d="M3 17l6-6 4 4 8-8M14 7h7v7" /></svg>;
     case "coffee":
