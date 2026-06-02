@@ -7,7 +7,7 @@ import { AppProvider, useApp } from "@/src/contexts/AppContext";
 import Sidebar from "@/src/components/Sidebar";
 import Icon from "@/src/components/Icon";
 import ThemePicker from "@/src/components/ThemePicker";
-import { getSession, logout } from "@/src/auth";
+import { logout } from "@/src/auth";
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard", checkin: "Check-in", calendar: "Calendar", leave: "Leave",
@@ -18,14 +18,24 @@ const ROUTE_TITLES = {
 function AppShell({ children }) {
   const router   = useRouter();
   const pathname = usePathname();
-  const { user, setUser, role, setRole, theme, setTheme, data } = useApp();
+  const { user, setUser, role, setRole, theme, setTheme, data, ready } = useApp();
   const lenisRef = useRef(null);
   const mainRef  = useRef(null);
 
-  // Auth guard
+  // Hide boot splash + auth guard after localStorage is ready
   useEffect(() => {
-    if (!getSession()) router.replace("/login");
-  }, []);
+    if (!ready) return;
+    // Hide boot splash
+    const boot = document.getElementById("boot");
+    if (boot) {
+      boot.style.transition = "opacity 0.4s ease";
+      boot.style.opacity = "0";
+      boot.style.pointerEvents = "none";
+      setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
+    }
+    // Auth guard
+    if (!user) router.replace("/login");
+  }, [ready, user]);
 
   // Lenis smooth scroll
   useEffect(() => {
@@ -68,21 +78,20 @@ function AppShell({ children }) {
     router.push("/login");
   };
 
-  // Current route key from pathname
-  const routeKey = pathname.replace(/^\//, "") || "dashboard";
+  // Don't render the shell until auth state is resolved
+  if (!ready || !user) return null;
 
-  if (!user && !getSession()) return null;
-  const me = data?.me ? { ...data.me, role: user?.role ?? getSession()?.role } : null;
-  if (!me) return null;
+  const routeKey = pathname.replace(/^\//, "") || "dashboard";
+  const me = { ...data.me, role: user.role };
 
   return (
     <div className="app">
       <Sidebar
         route={routeKey}
         setRoute={(r) => router.push("/" + r)}
-        me={{ ...me, role: user?.role ?? getSession()?.role }}
+        me={me}
         role={role}
-        setRole={(user?.role ?? getSession()?.role) === "manager" ? setRole : undefined}
+        setRole={user.role === "manager" ? setRole : undefined}
         onLogout={handleLogout}
       />
       <main className="main" ref={mainRef}>

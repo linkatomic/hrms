@@ -8,6 +8,15 @@ export default function LoginPage() {
   const router = useRouter();
 
   useEffect(() => {
+    // Hide boot splash
+    const boot = document.getElementById("boot");
+    if (boot) {
+      boot.style.transition = "opacity 0.4s ease";
+      boot.style.opacity = "0";
+      boot.style.pointerEvents = "none";
+      setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
+    }
+    // Redirect if already logged in
     if (getSession()) router.replace("/dashboard");
   }, []);
 

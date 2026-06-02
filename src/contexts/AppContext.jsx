@@ -27,11 +27,11 @@ function buildData(user) {
 const AppContext = createContext(null);
 
 export function AppProvider({ children }) {
-  const [user, setUser]   = useState(() => getSession());
-  const [role, setRole]   = useState(() => getSession()?.role ?? "employee");
-  const [theme, setTheme] = useState(() => {
-    try { return localStorage.getItem("amrytt_hrms_theme") ?? "dark"; } catch { return "dark"; }
-  });
+  // All initial values are static (no localStorage) so server + client match
+  const [user, setUser]   = useState(null);
+  const [role, setRole]   = useState("employee");
+  const [theme, setTheme] = useState("dark");
+  const [ready, setReady] = useState(false);
   const [clock, setClock] = useState({
     in:         Date.now() - 5.47 * 3600 * 1000,
     out:        null,
@@ -41,6 +41,18 @@ export function AppProvider({ children }) {
     breakStart: null,
     breaks:     [],
   });
+
+  // Read localStorage only on client after mount
+  useEffect(() => {
+    const session = getSession();
+    setUser(session);
+    setRole(session?.role ?? "employee");
+    try {
+      const saved = localStorage.getItem("amrytt_hrms_theme");
+      if (saved) setTheme(saved);
+    } catch {}
+    setReady(true);
+  }, []);
 
   // Sync theme to document
   useEffect(() => {
@@ -53,7 +65,7 @@ export function AppProvider({ children }) {
   const data = buildData(user);
 
   return (
-    <AppContext.Provider value={{ user, setUser, role, setRole, data, theme, setTheme, clock, setClock }}>
+    <AppContext.Provider value={{ user, setUser, role, setRole, data, theme, setTheme, clock, setClock, ready }}>
       {children}
     </AppContext.Provider>
   );
