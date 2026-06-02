@@ -7,7 +7,7 @@ import { AppProvider, useApp } from "@/src/contexts/AppContext";
 import Sidebar from "@/src/components/Sidebar";
 import Icon from "@/src/components/Icon";
 import ThemePicker from "@/src/components/ThemePicker";
-import { logout } from "@/src/auth";
+import { supabase } from "@/src/lib/supabase";
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard", checkin: "Check-in", calendar: "Calendar", leave: "Leave",
@@ -34,7 +34,11 @@ function AppShell({ children }) {
       setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
     }
     // Auth guard
-    if (!user) router.replace("/login");
+    if (!user) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (!session) router.replace("/login");
+      });
+    }
   }, [ready, user]);
 
   // Lenis smooth scroll
@@ -72,8 +76,8 @@ function AppShell({ children }) {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     router.push("/login");
   };

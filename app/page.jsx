@@ -6,7 +6,9 @@ import { getSession } from "@/src/auth";
 export default function RootPage() {
   const router = useRouter();
   useEffect(() => {
-    router.replace(getSession() ? "/dashboard" : "/login");
+    getSession().then(session => {
+      router.replace(session ? "/dashboard" : "/login");
+    });
   }, []);
   return null;
 }

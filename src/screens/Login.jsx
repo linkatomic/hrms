@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
 import { gsap } from "gsap";
-import { login } from "../auth";
+import { supabase } from "../lib/supabase";
 import Icon from "../components/Icon";
 
 const TAGLINES = [
@@ -48,17 +48,14 @@ const Login = ({ onLogin }) => {
     }
     setLoading(true);
     setError("");
-    // Simulate brief async check
-    await new Promise(r => setTimeout(r, 420));
-    const user = login(email, password);
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (!user) {
+    if (error || !data.user) {
       setError("Incorrect email or password. Contact your team lead to reset access.");
       shakeCard();
       gsap.from(errRef.current, { y: -8, opacity: 0, duration: 0.3, ease: "power2.out" });
     } else {
-      // Flash success, then hand off
-      gsap.to(cardRef.current, { scale: 0.98, duration: 0.12, yoyo: true, repeat: 1, onComplete: () => onLogin(user) });
+      gsap.to(cardRef.current, { scale: 0.98, duration: 0.12, yoyo: true, repeat: 1, onComplete: () => onLogin(data.user) });
     }
   };
 

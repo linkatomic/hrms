@@ -2,6 +2,14 @@
 import { useState, useEffect } from "react";
 import { gsap } from "gsap";
 import Icon from "../components/Icon";
+import { supabase } from "../lib/supabase";
+import { useApp } from "../contexts/AppContext";
+
+const fmtTime = (ts) => {
+  if (!ts) return "—";
+  const d = new Date(ts);
+  return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
+};
 
 const YearHeatmap = () => {
   const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
@@ -24,21 +32,20 @@ const YearHeatmap = () => {
           <span key={dIdx} style={{ display: "contents" }}>
             <div className="t-mono" style={{ fontSize: 9, color: "var(--text-mute)", textAlign: "right", paddingRight: 6, gridRow: dIdx + 2 }}>{dayLabel}</div>
             {Array.from({ length: 53 }).map((_, w) => {
-              const x = r();
+              const x        = r();
               const isFuture = w > 21;
               let bg = "var(--bg-elev-2)";
               if (!isFuture) {
-                if (x < 0.04) bg = "var(--bad)";
-                else if (x < 0.1) bg = "var(--warn)";
+                if      (x < 0.04) bg = "var(--bad)";
+                else if (x < 0.1)  bg = "var(--warn)";
                 else if (x < 0.25) bg = "var(--info)";
-                else bg = "var(--good)";
+                else               bg = "var(--good)";
               }
               return (
-                <div key={w} title={`Week ${w+1}`} style={{
+                <div key={w} title={`Week ${w + 1}`} style={{
                   width: "100%", aspectRatio: "1/1",
                   background: bg, opacity: isFuture ? 0.18 : 0.85,
-                  border: "1.5px solid var(--border)",
-                  borderRadius: 2,
+                  border: "1.5px solid var(--border)", borderRadius: 2,
                 }}></div>
               );
             })}
@@ -52,19 +59,64 @@ const YearHeatmap = () => {
           <div key={i} style={{ width: 14, height: 14, background: c, border: "1.5px solid var(--border)" }}></div>
         ))}
         <span className="t-mono tiny muted">More activity</span>
-        <span className="t-mono tiny muted" style={{ marginLeft: "auto" }}>2026 · 142 days logged</span>
+        <span className="t-mono tiny muted" style={{ marginLeft: "auto" }}>{new Date().getFullYear()} · attendance heatmap</span>
       </div>
     </div>
   );
 };
 
 const Calendar = ({ data }) => {
-  const [month, setMonth] = useState(4);
-  const year = 2026;
+  const now      = new Date();
+  const [month, setMonth] = useState(now.getMonth());
+  const year     = now.getFullYear();
+  const todayDate  = now.getDate();
+  const todayMonth = now.getMonth();
 
-  const monthNames = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-  const firstDay = new Date(year, month, 1).getDay();
+  const { user } = useApp();
+  const [attendance, setAttendance] = useState({});
+
+  const monthNames  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const monthStr    = String(month + 1).padStart(2, "0");
+
+  // Fetch attendance for the displayed month
+  useEffect(() => {
+    if (!user?.id) return;
+    const fromDate = `${year}-${monthStr}-01`;
+    const toDate   = `${year}-${monthStr}-${String(daysInMonth).padStart(2, "0")}`;
+
+    supabase
+      .from("attendance")
+      .select("date, status, total_hours, clock_in, clock_out, break_minutes")
+      .eq("profile_id", user.id)
+      .gte("date", fromDate)
+      .lte("date", toDate)
+      .then(({ data: rows }) => {
+        const map = {};
+        if (rows) {
+          rows.forEach(r => {
+            map[r.date] = {
+              status:        r.status,
+              hrs:           r.total_hours,
+              clock_in:      r.clock_in,
+              clock_out:     r.clock_out,
+              break_minutes: r.break_minutes,
+            };
+          });
+        }
+        // Mark weekends that have no record
+        for (let d = 1; d <= daysInMonth; d++) {
+          const ds  = `${year}-${monthStr}-${String(d).padStart(2, "0")}`;
+          const dow = new Date(year, month, d).getDay();
+          if ((dow === 0 || dow === 6) && !map[ds]) {
+            map[ds] = { status: "weekend" };
+          }
+        }
+        setAttendance(map);
+      });
+  }, [user?.id, month]);
+
+  const firstDay     = new Date(year, month, 1).getDay();
   const prevMonthDays = new Date(year, month, 0).getDate();
 
   const cells = [];
@@ -72,25 +124,24 @@ const Calendar = ({ data }) => {
     cells.push({ day: prevMonthDays - firstDay + 1 + i, other: true });
   }
   for (let d = 1; d <= daysInMonth; d++) {
-    const ds = `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
-    const att = data.attendance[ds];
+    const ds  = `${year}-${monthStr}-${String(d).padStart(2, "0")}`;
+    const att = attendance[ds];
     cells.push({ day: d, ds, ...att });
   }
   while (cells.length < 42) cells.push({ day: cells.length - daysInMonth - firstDay + 1, other: true });
 
-  const today = 26;
-  const [sel, setSel] = useState(today);
+  const [sel, setSel] = useState(todayDate);
 
   useEffect(() => {
     gsap.from(".cal-cell", { y: 8, opacity: 0, duration: 0.35, stagger: 0.008, ease: "power2.out" });
   }, [month]);
 
-  const selDs = `${year}-${String(month+1).padStart(2,"0")}-${String(sel).padStart(2,"0")}`;
-  const selData = data.attendance[selDs];
+  const selDs   = `${year}-${monthStr}-${String(sel).padStart(2, "0")}`;
+  const selData = attendance[selDs];
 
-  const monthCells = cells.filter(c => !c.other);
+  const monthCells   = cells.filter(c => !c.other);
   const presentCount = monthCells.filter(c => c.status === "present" || c.status === "wfh").length;
-  const totalHours = monthCells.reduce((s,c) => s + (c.hrs || 0), 0);
+  const totalHours   = monthCells.reduce((s, c) => s + (c.hrs || 0), 0);
 
   return (
     <div>
@@ -139,13 +190,13 @@ const Calendar = ({ data }) => {
           </div>
           <div className="cal-grid" style={{ marginTop: 4 }}>
             {cells.map((c, i) => {
-              const isToday = !c.other && c.day === today && month === 4;
-              const isSel = !c.other && c.day === sel;
-              const dotClass = c.status === "present" ? "present" :
-                              c.status === "wfh" ? "wfh" :
-                              c.status === "leave" ? "leave" :
-                              c.status === "absent" ? "absent" :
-                              c.status === "weekend" ? "weekend" : null;
+              const isToday = !c.other && c.day === todayDate && month === todayMonth;
+              const isSel   = !c.other && c.day === sel;
+              const dotClass = c.status === "present" ? "present"
+                             : c.status === "wfh"     ? "wfh"
+                             : c.status === "leave"   ? "leave"
+                             : c.status === "absent"  ? "absent"
+                             : c.status === "weekend" ? "weekend" : null;
               return (
                 <div
                   key={i}
@@ -157,10 +208,10 @@ const Calendar = ({ data }) => {
                     <span className="day-n">{c.day}</span>
                     {dotClass && <span className={"dot " + dotClass}></span>}
                   </div>
-                  {c.hrs && <div className="hrs">{c.hrs.toFixed(1)}h</div>}
-                  {!c.hrs && c.status === "leave" && <div className="hrs" style={{ color: "var(--warn)" }}>LEAVE</div>}
-                  {!c.hrs && c.status === "absent" && <div className="hrs" style={{ color: "var(--bad)" }}>ABSENT</div>}
-                  {isToday && <div className="hrs" style={{ color: "var(--accent)" }}>TODAY</div>}
+                  {c.hrs           && <div className="hrs">{c.hrs.toFixed(1)}h</div>}
+                  {!c.hrs && c.status === "leave"   && <div className="hrs" style={{ color: "var(--warn)" }}>LEAVE</div>}
+                  {!c.hrs && c.status === "absent"  && <div className="hrs" style={{ color: "var(--bad)" }}>ABSENT</div>}
+                  {isToday         && <div className="hrs" style={{ color: "var(--accent)" }}>TODAY</div>}
                 </div>
               );
             })}
@@ -180,9 +231,9 @@ const Calendar = ({ data }) => {
           <div className="t-eyebrow">Selected · {monthNames[month]} {sel}</div>
           <div className="t-display" style={{ fontSize: 36, marginTop: 8, letterSpacing: "-0.02em" }}>
             {selData?.status === "present" && "Worked in office"}
-            {selData?.status === "wfh" && "Worked remotely"}
-            {selData?.status === "leave" && "On approved leave"}
-            {selData?.status === "absent" && "Marked absent"}
+            {selData?.status === "wfh"     && "Worked remotely"}
+            {selData?.status === "leave"   && "On approved leave"}
+            {selData?.status === "absent"  && "Marked absent"}
             {selData?.status === "weekend" && "Weekend"}
             {!selData && "—"}
           </div>
@@ -196,30 +247,28 @@ const Calendar = ({ data }) => {
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Status</div>
-                  <div style={{ marginTop: 4 }}><span className={"pill " + (selData.status === "wfh" ? "info" : "good")}><span className="dot"></span>{selData.status === "wfh" ? "Remote" : "Office"}</span></div>
+                  <div style={{ marginTop: 4 }}>
+                    <span className={"pill " + (selData.status === "wfh" ? "info" : "good")}>
+                      <span className="dot"></span>{selData.status === "wfh" ? "Remote" : "Office"}
+                    </span>
+                  </div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Clock in</div>
-                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>09:0{sel % 9}</div>
+                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{fmtTime(selData.clock_in)}</div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Clock out</div>
-                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{selData.hrs ? "18:1" + (sel%9) : "—"}</div>
+                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{fmtTime(selData.clock_out)}</div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Breaks</div>
-                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>48 min</div>
+                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{selData.break_minutes ? selData.break_minutes + " min" : "0 min"}</div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Location</div>
-                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{selData.status === "wfh" ? "Brooklyn" : "Office · NYC"}</div>
+                  <div className="t-display" style={{ fontSize: 16, marginTop: 4 }}>{selData.status === "wfh" ? "Remote" : "Office"}</div>
                 </div>
-              </div>
-              <div className="rule">notes</div>
-              <div className="muted" style={{ fontSize: 13 }}>
-                {selData.status === "wfh"
-                  ? "Worked remotely. Logged hours from home Wi-Fi (10.0.0.42). Two scheduled focus blocks."
-                  : "Standard office day. Two scheduled focus blocks, one client crit."}
               </div>
             </>
           )}
@@ -227,10 +276,10 @@ const Calendar = ({ data }) => {
           {selData?.status === "leave" && (
             <>
               <div style={{ marginTop: 18 }}>
-                <span className="pill warn"><span className="dot"></span>APPROVED · PTO</span>
+                <span className="pill warn"><span className="dot"></span>APPROVED · LEAVE</span>
               </div>
-              <div className="rule">request</div>
-              <div className="muted" style={{ fontSize: 13 }}>LV-0116 · approved by Priya Iyer on May 03. Reason: Personal.</div>
+              <div className="rule">note</div>
+              <div className="muted" style={{ fontSize: 13 }}>Approved leave day.</div>
             </>
           )}
 
@@ -240,7 +289,9 @@ const Calendar = ({ data }) => {
                 <span className="pill bad"><span className="dot"></span>UNRECONCILED</span>
               </div>
               <div className="rule">action</div>
-              <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>No clock-in detected for this day. Request retroactive correction or convert to sick leave.</div>
+              <div className="muted" style={{ fontSize: 13, marginBottom: 12 }}>
+                No clock-in detected for this day. Request retroactive correction or convert to sick leave.
+              </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="brut-btn brut-btn--primary" style={{ flex: 1, justifyContent: "center" }}>Convert to sick leave</button>
                 <button className="brut-btn brut-btn--ghost">Request correction</button>
@@ -249,9 +300,7 @@ const Calendar = ({ data }) => {
           )}
 
           {selData?.status === "weekend" && (
-            <div className="muted" style={{ marginTop: 16, fontSize: 13 }}>
-              Non-working day. You logged in for 0.4h on Slack between 19:00–19:30 — not counted toward hours.
-            </div>
+            <div className="muted" style={{ marginTop: 16, fontSize: 13 }}>Non-working day.</div>
           )}
         </div>
       </div>

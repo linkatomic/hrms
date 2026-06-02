@@ -17,7 +17,9 @@ export default function LoginPage() {
       setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
     }
     // Redirect if already logged in
-    if (getSession()) router.replace("/dashboard");
+    getSession().then(session => {
+      if (session) router.replace("/dashboard");
+    });
   }, []);
 
   return <Login onLogin={() => router.push("/dashboard")} />;

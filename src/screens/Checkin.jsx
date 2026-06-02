@@ -2,10 +2,76 @@
 import { useEffect, useRef, useState } from "react";
 import { gsap } from "gsap";
 import Icon from "../components/Icon";
+import { supabase } from "../lib/supabase";
+import { useApp } from "../contexts/AppContext";
+
+const fmtTime = (ts) => {
+  if (!ts) return "—:—";
+  const d = new Date(ts);
+  return d.getHours().toString().padStart(2, "0") + ":" + d.getMinutes().toString().padStart(2, "0");
+};
 
 const Checkin = ({ data, clock, setClock }) => {
   const holdRef = useRef(null);
-  const rafRef = useRef(null);
+  const rafRef  = useRef(null);
+  const { user } = useApp();
+  const [attendanceId, setAttendanceId] = useState(null);
+  const [pastDays, setPastDays]         = useState([]);
+
+  const todayStr = new Date().toISOString().split("T")[0];
+
+  // Ref keeps latest values accessible inside the hold-button closure without stale captures
+  const dataRef = useRef({});
+  dataRef.current = { clock, user, attendanceId, todayStr };
+
+  // Load today's attendance id + past 14 days chart
+  useEffect(() => {
+    if (!user?.id) return;
+
+    supabase
+      .from("attendance")
+      .select("id")
+      .eq("profile_id", user.id)
+      .eq("date", todayStr)
+      .maybeSingle()
+      .then(({ data: row }) => { if (row) setAttendanceId(row.id); });
+
+    const from = new Date();
+    from.setDate(from.getDate() - 13);
+    const fromStr = from.toISOString().split("T")[0];
+
+    supabase
+      .from("attendance")
+      .select("date, total_hours, status")
+      .eq("profile_id", user.id)
+      .gte("date", fromStr)
+      .lte("date", todayStr)
+      .then(({ data: rows }) => {
+        if (!rows) return;
+        const map = Object.fromEntries(rows.map(r => [r.date, r]));
+        const days = [];
+        for (let i = 13; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const ds  = d.toISOString().split("T")[0];
+          const dow = d.getDay();
+          if (dow === 0 || dow === 6) {
+            days.push({ d: d.getDate().toString(), h: 0, k: "off" });
+          } else {
+            const rec = map[ds];
+            days.push({
+              d: d.getDate().toString(),
+              h: rec?.total_hours || 0,
+              k: rec?.status === "wfh" ? "wfh"
+               : rec?.status === "absent" ? "absent"
+               : rec?.total_hours ? "in"
+               : "off",
+            });
+          }
+        }
+        setPastDays(days);
+      });
+  }, [user?.id]);
 
   // Live ticking timer
   useEffect(() => {
@@ -16,40 +82,75 @@ const Checkin = ({ data, clock, setClock }) => {
     return () => clearInterval(interval);
   }, [clock.in, clock.out, clock.onBreak]);
 
-  // Hold animation
+  // Hold-to-confirm button
   useEffect(() => {
     const el = holdRef.current;
     if (!el) return;
 
     const HOLD_MS = 800;
-    let holding = false;
+    let holding   = false;
     let startTime = 0;
 
     const tick = () => {
       const dt = Date.now() - startTime;
-      const p = Math.min(1, dt / HOLD_MS);
+      const p  = Math.min(1, dt / HOLD_MS);
       el.style.setProperty("--p", p);
       if (p >= 1) { finish(); return; }
       rafRef.current = requestAnimationFrame(tick);
     };
 
-    const finish = () => {
+    const finish = async () => {
       holding = false;
       cancelAnimationFrame(rafRef.current);
       el.style.setProperty("--p", 0);
-      if (!clock.in) {
-        setClock({ in: Date.now() - 5.47 * 3600 * 1000, out: null, elapsed: 5.47 * 3600, breakTotal: 0, onBreak: false, breakStart: null, breaks: [] });
-      } else if (!clock.out) {
-        setClock((c) => ({ ...c, out: Date.now() }));
+
+      const { clock: c, user: u, attendanceId: aid, todayStr: ds } = dataRef.current;
+
+      if (!c.in) {
+        // Clock in
+        const now = Date.now();
+        setClock({ in: now, out: null, elapsed: 0, breakTotal: 0, onBreak: false, breakStart: null, breaks: [] });
+        if (u?.id) {
+          const { data: row } = await supabase
+            .from("attendance")
+            .upsert(
+              { profile_id: u.id, date: ds, clock_in: new Date(now).toISOString(), status: "present" },
+              { onConflict: "profile_id,date" }
+            )
+            .select("id")
+            .single();
+          if (row) setAttendanceId(row.id);
+        }
+      } else if (!c.out) {
+        // Clock out
+        const now     = Date.now();
+        const elapsed = (now - c.in) / 1000 - (c.breakTotal || 0);
+        setClock((prev) => ({ ...prev, out: now }));
+        if (u?.id) {
+          const payload = {
+            clock_out:    new Date(now).toISOString(),
+            total_hours:  parseFloat((elapsed / 3600).toFixed(2)),
+            break_minutes: Math.round((c.breakTotal || 0) / 60),
+          };
+          if (aid) {
+            await supabase.from("attendance").update(payload).eq("id", aid);
+          } else {
+            await supabase.from("attendance").upsert(
+              { profile_id: u.id, date: ds, clock_in: new Date(c.in).toISOString(), status: "present", ...payload },
+              { onConflict: "profile_id,date" }
+            );
+          }
+        }
       } else {
-        setClock({ in: Date.now(), out: null, elapsed: 0, breakTotal: 0, onBreak: false, breakStart: null, breaks: [] });
+        // Start new day
+        setClock({ in: null, out: null, elapsed: 0, breakTotal: 0, onBreak: false, breakStart: null, breaks: [] });
       }
     };
 
     const start = (e) => {
       e.preventDefault();
       if (holding) return;
-      holding = true;
+      holding   = true;
       startTime = Date.now();
       tick();
     };
@@ -58,51 +159,57 @@ const Checkin = ({ data, clock, setClock }) => {
       holding = false;
       cancelAnimationFrame(rafRef.current);
       const cur = parseFloat(el.style.getPropertyValue("--p") || 0);
-      gsap.to(el, { duration: 0.3, ease: "power2.out", onUpdate: function() {
+      gsap.to(el, { duration: 0.3, ease: "power2.out", onUpdate: function () {
         el.style.setProperty("--p", cur * (1 - this.progress()));
       }});
     };
 
-    el.addEventListener("mousedown", start);
-    el.addEventListener("touchstart", start, { passive: false });
-    window.addEventListener("mouseup", cancel);
-    window.addEventListener("touchend", cancel);
+    el.addEventListener("mousedown",  start);
+    el.addEventListener("touchstart", start,  { passive: false });
+    window.addEventListener("mouseup",   cancel);
+    window.addEventListener("touchend",  cancel);
     el.addEventListener("mouseleave", cancel);
 
     return () => {
-      el.removeEventListener("mousedown", start);
+      el.removeEventListener("mousedown",  start);
       el.removeEventListener("touchstart", start);
-      window.removeEventListener("mouseup", cancel);
+      window.removeEventListener("mouseup",  cancel);
       window.removeEventListener("touchend", cancel);
       el.removeEventListener("mouseleave", cancel);
       cancelAnimationFrame(rafRef.current);
     };
   }, [clock.in, clock.out]);
 
-  const total = clock.elapsed || 0;
-  const h = Math.floor(total / 3600);
-  const m = Math.floor((total % 3600) / 60);
-  const s = Math.floor(total % 60);
-  const pad = (n) => String(n).padStart(2, "0");
-
-  const TARGET = 9;
+  const total   = clock.elapsed || 0;
+  const h       = Math.floor(total / 3600);
+  const m       = Math.floor((total % 3600) / 60);
+  const s       = Math.floor(total % 60);
+  const pad     = (n) => String(n).padStart(2, "0");
+  const TARGET  = 9;
   const pctOfDay = Math.min(100, (total / 3600 / TARGET) * 100);
+  const remaining = Math.max(0, TARGET - total / 3600);
 
-  const log = [
-    { t: "09:04", e: "Clocked in",    place: "Office · NYC",     kind: "in" },
-    { t: "11:42", e: "Break started", place: "Coffee · 12 min",  kind: "break" },
-    { t: "11:54", e: "Resumed",       place: "—",                kind: "in" },
-    { t: "13:15", e: "Lunch",         place: "Lunch · 38 min",   kind: "break" },
-    { t: "13:53", e: "Resumed",       place: "—",                kind: "in" },
-  ];
+  const estClockout = clock.in
+    ? new Date(clock.in + TARGET * 3600 * 1000 + (clock.breakTotal || 0) * 1000)
+    : null;
 
-  const status = !clock.in ? "out" : clock.out ? "done" : clock.onBreak ? "break" : "in";
+  // Build today's event log from clock state
+  const log = [];
+  if (clock.in)  log.push({ t: fmtTime(clock.in),  e: "Clocked in",  place: "Office",                 kind: "in"  });
+  if (clock.out) log.push({ t: fmtTime(clock.out), e: "Clocked out", place: `${h}h ${m}m total`,      kind: "out" });
+
+  const status      = !clock.in ? "out" : clock.out ? "done" : clock.onBreak ? "break" : "in";
   const statusLabel = { out: "Tap to start", in: "Clocked in", break: "On break", done: "Day complete" }[status];
+  const dayLabel    = new Date().toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" }).toUpperCase();
+
+  const chartData = pastDays.length > 0
+    ? pastDays
+    : Array.from({ length: 14 }, (_, i) => ({ d: (i + 1).toString(), h: 0, k: "off" }));
 
   return (
     <div>
       <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: 6 }}>
-        <div className="t-eyebrow">CHECK-IN / OUT · TUE MAY 26</div>
+        <div className="t-eyebrow">CHECK-IN / OUT · {dayLabel}</div>
         <span className={"pill " + (status === "in" ? "good" : status === "break" ? "warn" : status === "done" ? "info" : "")}>
           <span className="dot"></span>{statusLabel.toUpperCase()}
         </span>
@@ -124,15 +231,21 @@ const Checkin = ({ data, clock, setClock }) => {
               <div style={{ display: "flex", gap: 18, marginTop: 14, flexWrap: "wrap" }}>
                 <div>
                   <div className="t-eyebrow tiny">Clocked in</div>
-                  <div className="t-display" style={{ fontSize: 18, marginTop: 2 }}>09:04</div>
+                  <div className="t-display" style={{ fontSize: 18, marginTop: 2 }}>{clock.in ? fmtTime(clock.in) : "—:—"}</div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Est. clock-out</div>
-                  <div className="t-display" style={{ fontSize: 18, marginTop: 2, color: "var(--accent)" }}>18:34</div>
+                  <div className="t-display" style={{ fontSize: 18, marginTop: 2, color: "var(--accent)" }}>
+                    {estClockout
+                      ? estClockout.getHours().toString().padStart(2, "0") + ":" + estClockout.getMinutes().toString().padStart(2, "0")
+                      : "—:—"}
+                  </div>
                 </div>
                 <div>
                   <div className="t-eyebrow tiny">Breaks</div>
-                  <div className="t-display" style={{ fontSize: 18, marginTop: 2 }}>50m</div>
+                  <div className="t-display" style={{ fontSize: 18, marginTop: 2 }}>
+                    {clock.breakTotal ? Math.round(clock.breakTotal / 60) + "m" : "0m"}
+                  </div>
                 </div>
               </div>
             </div>
@@ -151,7 +264,7 @@ const Checkin = ({ data, clock, setClock }) => {
               <i style={{ width: pctOfDay + "%" }} />
             </div>
             <div className="t-mono tiny" style={{ marginTop: 8, color: "var(--text-mute)" }}>
-              ON TRACK · {Math.max(0, TARGET - total / 3600).toFixed(2)}H REMAINING
+              {remaining > 0 ? `ON TRACK · ${remaining.toFixed(2)}H REMAINING` : "TARGET REACHED"}
             </div>
           </div>
 
@@ -161,10 +274,10 @@ const Checkin = ({ data, clock, setClock }) => {
             <div className="label">
               <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
                 <Icon name={status === "out" ? "play" : "stop"} size={20} />
-                {status === "out" && "Hold to clock in"}
-                {status === "in" && "Hold to clock out"}
+                {status === "out"   && "Hold to clock in"}
+                {status === "in"    && "Hold to clock out"}
                 {status === "break" && "Hold to resume"}
-                {status === "done" && "Hold to start new day"}
+                {status === "done"  && "Hold to start new day"}
               </span>
               <span className="t-mono" style={{ fontSize: 11, opacity: 0.7 }}>HOLD 0.8s</span>
             </div>
@@ -186,25 +299,23 @@ const Checkin = ({ data, clock, setClock }) => {
         {/* RIGHT: progress ring + day log */}
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
           <div className="brut-card" style={{ padding: 26, display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div className="t-eyebrow" style={{ alignSelf: "flex-start", marginBottom: 12 }}>This week · 38h 14m / 45h</div>
-            <div className="ring" style={{ "--p": 85, "--size": "180px" }}>
+            <div className="t-eyebrow" style={{ alignSelf: "flex-start", marginBottom: 12 }}>Today&apos;s progress</div>
+            <div className="ring" style={{ "--p": pctOfDay, "--size": "180px" }}>
               <div>
-                <div className="t-num" style={{ fontSize: 38 }}>85<span style={{ fontSize: 16, color: "var(--text-mute)" }}>%</span></div>
-                <div className="t-mono tiny" style={{ color: "var(--text-dim)" }}>WEEK 22</div>
+                <div className="t-num" style={{ fontSize: 38 }}>
+                  {pctOfDay.toFixed(0)}<span style={{ fontSize: 16, color: "var(--text-mute)" }}>%</span>
+                </div>
+                <div className="t-mono tiny" style={{ color: "var(--text-dim)" }}>OF 9H TARGET</div>
               </div>
             </div>
             <div style={{ display: "flex", gap: 18, marginTop: 18, alignSelf: "stretch", justifyContent: "space-around" }}>
               <div style={{ textAlign: "center" }}>
-                <div className="t-num" style={{ fontSize: 18 }}>4</div>
-                <div className="t-mono tiny muted">DAYS</div>
+                <div className="t-num" style={{ fontSize: 18 }}>{h}h {pad(m)}m</div>
+                <div className="t-mono tiny muted">WORKED</div>
               </div>
               <div style={{ textAlign: "center" }}>
-                <div className="t-num" style={{ fontSize: 18 }}>+1.4h</div>
-                <div className="t-mono tiny muted">OVERTIME</div>
-              </div>
-              <div style={{ textAlign: "center" }}>
-                <div className="t-num" style={{ fontSize: 18 }}>00:42</div>
-                <div className="t-mono tiny muted">AVG BREAK</div>
+                <div className="t-num" style={{ fontSize: 18 }}>{remaining.toFixed(1)}h</div>
+                <div className="t-mono tiny muted">REMAINING</div>
               </div>
             </div>
           </div>
@@ -213,13 +324,15 @@ const Checkin = ({ data, clock, setClock }) => {
             <div className="t-eyebrow" style={{ marginBottom: 12 }}>Today&apos;s log</div>
             <div style={{ position: "relative", paddingLeft: 18 }}>
               <div style={{ position: "absolute", left: 4, top: 4, bottom: 4, width: 2, background: "var(--border)" }}></div>
+              {log.length === 0 && (
+                <div className="muted tiny" style={{ paddingLeft: 4 }}>No activity yet today.</div>
+              )}
               {log.map((l, i) => (
                 <div key={i} style={{ display: "flex", gap: 12, padding: "6px 0", position: "relative" }}>
                   <div style={{
                     position: "absolute", left: -18, top: 10, width: 10, height: 10,
-                    background: l.kind === "in" ? "var(--accent)" : "var(--warn)",
-                    border: "2px solid var(--bg)",
-                    borderRadius: 2,
+                    background: l.kind === "in" ? "var(--accent)" : l.kind === "out" ? "var(--good)" : "var(--warn)",
+                    border: "2px solid var(--bg)", borderRadius: 2,
                   }}></div>
                   <div className="t-mono" style={{ fontSize: 11, color: "var(--text-mute)", width: 44 }}>{l.t}</div>
                   <div style={{ flex: 1 }}>
@@ -228,20 +341,26 @@ const Checkin = ({ data, clock, setClock }) => {
                   </div>
                 </div>
               ))}
-              <div style={{ display: "flex", gap: 12, padding: "6px 0", position: "relative", opacity: 0.5 }}>
-                <div style={{ position: "absolute", left: -18, top: 10, width: 10, height: 10, background: "var(--text-mute)", border: "2px solid var(--bg)", borderRadius: 2 }}></div>
-                <div className="t-mono" style={{ fontSize: 11, color: "var(--text-mute)", width: 44 }}>—:—</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13, fontFamily: "var(--font-display)", fontWeight: 500 }}>Clock-out pending</div>
-                  <div className="muted tiny">Est. 18:34</div>
+              {!clock.out && clock.in && (
+                <div style={{ display: "flex", gap: 12, padding: "6px 0", position: "relative", opacity: 0.5 }}>
+                  <div style={{ position: "absolute", left: -18, top: 10, width: 10, height: 10, background: "var(--text-mute)", border: "2px solid var(--bg)", borderRadius: 2 }}></div>
+                  <div className="t-mono" style={{ fontSize: 11, color: "var(--text-mute)", width: 44 }}>—:—</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, fontFamily: "var(--font-display)", fontWeight: 500 }}>Clock-out pending</div>
+                    <div className="muted tiny">
+                      {estClockout
+                        ? "Est. " + estClockout.getHours().toString().padStart(2, "0") + ":" + estClockout.getMinutes().toString().padStart(2, "0")
+                        : "—"}
+                    </div>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Week recap */}
+      {/* Past 14 days chart */}
       <div className="brut-card" style={{ padding: 22 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 18 }}>
           <div>
@@ -251,19 +370,17 @@ const Checkin = ({ data, clock, setClock }) => {
           <div style={{ display: "flex", gap: 10 }}>
             <span className="pill"><span className="dot" style={{ background: "var(--accent)" }}></span>Office</span>
             <span className="pill"><span className="dot" style={{ background: "var(--info)" }}></span>Remote</span>
-            <span className="pill"><span className="dot" style={{ background: "var(--warn)" }}></span>Leave</span>
+            <span className="pill"><span className="dot" style={{ background: "var(--bad)" }}></span>Absent</span>
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(14, 1fr)", gap: 5, alignItems: "end", height: 140 }}>
-          {[
-            { d: "12", h: 9.4, k: "in" }, { d: "13", h: 8.0, k: "wfh" }, { d: "14", h: 0, k: "absent" }, { d: "15", h: 7.9, k: "in" },
-            { d: "16", h: 0, k: "off" }, { d: "17", h: 0, k: "off" }, { d: "18", h: 8.7, k: "in" }, { d: "19", h: 9.1, k: "in" },
-            { d: "20", h: 8.3, k: "in" }, { d: "21", h: 7.5, k: "wfh" }, { d: "22", h: 8.8, k: "in" }, { d: "23", h: 0, k: "off" },
-            { d: "24", h: 0, k: "off" }, { d: "25", h: 9.0, k: "in" },
-          ].map((b, i) => {
-            const maxH = (b.h / 10) * 140;
-            const color = b.k === "in" ? "var(--accent)" : b.k === "wfh" ? "var(--info)" : b.k === "absent" ? "var(--bad)" : "var(--bg-elev-2)";
+          {chartData.map((b, i) => {
+            const maxH  = (b.h / 10) * 140;
+            const color = b.k === "in"     ? "var(--accent)"
+                        : b.k === "wfh"    ? "var(--info)"
+                        : b.k === "absent" ? "var(--bad)"
+                        : "var(--bg-elev-2)";
             return (
               <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                 <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
