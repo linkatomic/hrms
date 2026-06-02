@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect } from "react";
 import { gsap } from "gsap";
 import Icon from "../components/Icon";

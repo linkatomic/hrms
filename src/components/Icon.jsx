@@ -1,3 +1,4 @@
+"use client";
 const Icon = ({ name, size = 16, className = "" }) => {
   const props = {
     width: size, height: size, viewBox: "0 0 24 24",

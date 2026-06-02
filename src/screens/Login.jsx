@@ -1,3 +1,4 @@
+"use client";
 import { useState, useEffect, useRef } from "react";
 import { gsap } from "gsap";
 import { login } from "../auth";

@@ -1,0 +1,14 @@
+{
+  "/_not-found/page": "/_not-found",
+  "/login/page": "/login",
+  "/page": "/",
+  "/(app)/calendar/page": "/calendar",
+  "/(app)/celebrations/page": "/celebrations",
+  "/(app)/dashboard/page": "/dashboard",
+  "/(app)/directory/page": "/directory",
+  "/(app)/checkin/page": "/checkin",
+  "/(app)/leave/page": "/leave",
+  "/(app)/notifications/page": "/notifications",
+  "/(app)/payroll/page": "/payroll",
+  "/(app)/profile/page": "/profile"
+}
