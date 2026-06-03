@@ -68,46 +68,63 @@ export function AppProvider({ children }) {
     } catch {}
 
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
-        setProfile(p);
-        setAllProfiles(allP);
-        setUser(session.user);
-        setRole(p?.role ?? "employee");
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session) {
+          const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
+          setProfile(p);
+          setAllProfiles(allP);
+          setUser(session.user);
+          setRole(p?.role ?? "employee");
 
-        // Load today's attendance for the clock state
-        const today = new Date().toISOString().slice(0, 10);
-        const { data: att } = await supabase
-          .from("attendance").select("*")
-          .eq("profile_id", session.user.id).eq("date", today).single();
-        if (att?.clock_in) {
-          const inMs = new Date(att.clock_in).getTime();
-          const outMs = att.clock_out ? new Date(att.clock_out).getTime() : null;
-          setClock({
-            in:         inMs,
-            out:        outMs,
-            elapsed:    outMs ? att.total_hours * 3600 : (Date.now() - inMs) / 1000 - (att.break_minutes * 60),
-            breakTotal: att.break_minutes * 60,
-            onBreak: false, breakStart: null, breaks: [],
-          });
+          // Load today's attendance for the clock state
+          const today = new Date().toISOString().slice(0, 10);
+          const { data: att } = await supabase
+            .from("attendance").select("*")
+            .eq("profile_id", session.user.id).eq("date", today).single();
+          if (att?.clock_in) {
+            const inMs  = new Date(att.clock_in).getTime();
+            const outMs = att.clock_out ? new Date(att.clock_out).getTime() : null;
+            const brk   = (att.break_minutes || 0) * 60;
+            setClock({
+              in:         inMs,
+              out:        outMs,
+              elapsed:    outMs ? att.total_hours * 3600 : (Date.now() - inMs) / 1000 - brk,
+              breakTotal: brk,
+              onBreak: false, breakStart: null, breaks: [],
+            });
+          }
         }
+      } catch (err) {
+        console.error("[AppContext] init failed:", err);
+      } finally {
+        // Always unblock the UI — auth guard handles redirect if no session
+        setReady(true);
       }
-      setReady(true);
     };
     init();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === "SIGNED_OUT") {
-        setUser(null); setProfile(null); setAllProfiles([]); setRole("employee");
-      } else if (session) {
-        const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
-        setProfile(p);
-        setAllProfiles(allP);
-        setUser(session.user);
-        setRole(p?.role ?? "employee");
-      }
-    });
+    let subscription = { unsubscribe: () => {} };
+    try {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (event === "SIGNED_OUT") {
+          setUser(null); setProfile(null); setAllProfiles([]); setRole("employee");
+        } else if (session) {
+          try {
+            const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
+            setProfile(p);
+            setAllProfiles(allP);
+            setUser(session.user);
+            setRole(p?.role ?? "employee");
+          } catch (err) {
+            console.error("[AppContext] auth state change failed:", err);
+          }
+        }
+      });
+      subscription = data.subscription;
+    } catch (err) {
+      console.error("[AppContext] onAuthStateChange setup failed:", err);
+    }
 
     return () => subscription.unsubscribe();
   }, []);
