@@ -7,7 +7,7 @@ import { AppProvider, useApp } from "@/src/contexts/AppContext";
 import Sidebar from "@/src/components/Sidebar";
 import Icon from "@/src/components/Icon";
 import ThemePicker from "@/src/components/ThemePicker";
-import { supabase } from "@/src/lib/supabase";
+import { supabase } from "@/src/lib/supabase"; // used for logout only
 
 const ROUTE_TITLES = {
   dashboard: "Dashboard", checkin: "Check-in", calendar: "Calendar", leave: "Leave",
@@ -33,14 +33,10 @@ function AppShell({ children }) {
     }
   }, []);
 
-  // Auth guard — runs once ready is resolved
+  // Auth guard — AppContext already resolved auth state, no need to re-query Supabase
   useEffect(() => {
     if (!ready || user) return;
-    supabase.auth.getSession()
-      .then(({ data: { session } }) => {
-        if (!session) router.replace("/login");
-      })
-      .catch(() => router.replace("/login"));
+    router.replace("/login");
   }, [ready, user]);
 
   // Lenis smooth scroll
