@@ -71,10 +71,14 @@ export function AppProvider({ children }) {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
+          // Unblock the UI immediately once we know the user is authenticated.
+          // Profile and attendance load below without blocking the shell render.
+          setUser(session.user);
+          setReady(true);
+
           const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
           setProfile(p);
           setAllProfiles(allP);
-          setUser(session.user);
           setRole(p?.role ?? "employee");
 
           // Load today's attendance for the clock state
@@ -98,7 +102,7 @@ export function AppProvider({ children }) {
       } catch (err) {
         console.error("[AppContext] init failed:", err);
       } finally {
-        // Always unblock the UI — auth guard handles redirect if no session
+        // Catches the no-session path and any errors — auth guard redirects if user is still null
         setReady(true);
       }
     };
