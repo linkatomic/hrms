@@ -17,7 +17,10 @@ const Login = ({ onLogin }) => {
   const [showPass, setShowPass] = useState(false);
   const [error, setError]       = useState("");
   const [loading, setLoading]   = useState(false);
-  const [tagline]               = useState(() => TAGLINES[Math.floor(Math.random() * TAGLINES.length)]);
+  const [tagline, setTagline] = useState(TAGLINES[0]);
+  useEffect(() => {
+    setTagline(TAGLINES[Math.floor(Math.random() * TAGLINES.length)]);
+  }, []);
 
   const cardRef  = useRef(null);
   const leftRef  = useRef(null);
