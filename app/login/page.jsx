@@ -1,14 +1,15 @@
 "use client";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { getSession } from "@/src/auth";
+import { useApp } from "@/src/contexts/AppContext";
 import Login from "@/src/screens/Login";
 
 export default function LoginPage() {
   const router = useRouter();
+  const { user, ready } = useApp();
 
+  // Hide boot splash
   useEffect(() => {
-    // Hide boot splash
     const boot = document.getElementById("boot");
     if (boot) {
       boot.style.transition = "opacity 0.4s ease";
@@ -16,11 +17,12 @@ export default function LoginPage() {
       boot.style.pointerEvents = "none";
       setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
     }
-    // Redirect if already logged in
-    getSession().then(session => {
-      if (session) router.replace("/dashboard");
-    });
   }, []);
 
-  return <Login onLogin={() => router.push("/dashboard")} />;
+  // Auto-redirect once AppContext confirms the user is authenticated
+  useEffect(() => {
+    if (ready && user) router.replace("/dashboard");
+  }, [ready, user]);
+
+  return <Login onLogin={() => router.replace("/dashboard")} />;
 }

@@ -51,14 +51,22 @@ const Login = ({ onLogin }) => {
     }
     setLoading(true);
     setError("");
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error || !data.user) {
-      setError("Incorrect email or password. Contact your team lead to reset access.");
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error || !data?.user) {
+        setError("Incorrect email or password. Contact your team lead to reset access.");
+        shakeCard();
+        if (errRef.current) gsap.from(errRef.current, { y: -8, opacity: 0, duration: 0.3, ease: "power2.out" });
+      } else {
+        // Brief success animation — redirect is handled by the page via AppContext
+        gsap.to(cardRef.current, { scale: 0.98, duration: 0.12, yoyo: true, repeat: 1, onComplete: () => onLogin(data.user) });
+      }
+    } catch (err) {
+      console.error("[Login] signIn error:", err);
+      setError("Connection error — please check your network and try again.");
       shakeCard();
-      gsap.from(errRef.current, { y: -8, opacity: 0, duration: 0.3, ease: "power2.out" });
-    } else {
-      gsap.to(cardRef.current, { scale: 0.98, duration: 0.12, yoyo: true, repeat: 1, onComplete: () => onLogin(data.user) });
+    } finally {
+      setLoading(false);
     }
   };
 
