@@ -22,10 +22,8 @@ function AppShell({ children }) {
   const lenisRef = useRef(null);
   const mainRef  = useRef(null);
 
-  // Hide boot splash + auth guard after localStorage is ready
+  // Hide boot splash as soon as React has mounted — no auth dependency
   useEffect(() => {
-    if (!ready) return;
-    // Hide boot splash
     const boot = document.getElementById("boot");
     if (boot) {
       boot.style.transition = "opacity 0.4s ease";
@@ -33,12 +31,16 @@ function AppShell({ children }) {
       boot.style.pointerEvents = "none";
       setTimeout(() => { if (boot) boot.style.display = "none"; }, 400);
     }
-    // Auth guard
-    if (!user) {
-      supabase.auth.getSession().then(({ data: { session } }) => {
+  }, []);
+
+  // Auth guard — runs once ready is resolved
+  useEffect(() => {
+    if (!ready || user) return;
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
         if (!session) router.replace("/login");
-      });
-    }
+      })
+      .catch(() => router.replace("/login"));
   }, [ready, user]);
 
   // Lenis smooth scroll
