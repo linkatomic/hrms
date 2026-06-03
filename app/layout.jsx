@@ -1,4 +1,5 @@
 import "./globals.css";
+import Providers from "./Providers";
 
 export const metadata = {
   title: "AMRYTT MEDIA · HRMS",
@@ -20,7 +21,7 @@ export default function RootLayout({ children }) {
       </head>
       <body>
         <div id="boot">AMRYTT · HRMS<span className="dot"></span></div>
-        {children}
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

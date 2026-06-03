@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { gsap } from "gsap";
 import Lenis from "lenis";
-import { AppProvider, useApp } from "@/src/contexts/AppContext";
+import { useApp } from "@/src/contexts/AppContext";
 import Sidebar from "@/src/components/Sidebar";
 import Icon from "@/src/components/Icon";
 import ThemePicker from "@/src/components/ThemePicker";
@@ -137,9 +137,5 @@ function AppShell({ children }) {
 }
 
 export default function AppLayout({ children }) {
-  return (
-    <AppProvider>
-      <AppShell>{children}</AppShell>
-    </AppProvider>
-  );
+  return <AppShell>{children}</AppShell>;
 }

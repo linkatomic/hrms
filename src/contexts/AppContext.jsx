@@ -114,11 +114,11 @@ export function AppProvider({ children }) {
         if (event === "SIGNED_OUT") {
           setUser(null); setProfile(null); setAllProfiles([]); setRole("employee");
         } else if (session) {
+          setUser(session.user); // unblock immediately; profile loads below
           try {
             const [p, allP] = await Promise.all([loadProfile(session.user.id), loadAllProfiles()]);
             setProfile(p);
             setAllProfiles(allP);
-            setUser(session.user);
             setRole(p?.role ?? "employee");
           } catch (err) {
             console.error("[AppContext] auth state change failed:", err);
