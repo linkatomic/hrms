@@ -39,9 +39,10 @@ const Dashboard = ({ data, setRoute }) => {
   const holdRef = useRef(null);
   const rafRef  = useRef(null);
 
-  // Live IST clock
-  const [now, setNow] = useState(new Date());
+  // Live IST clock — null initial state prevents server/client hydration mismatch (#418)
+  const [now, setNow] = useState(null);
   useEffect(() => {
+    setNow(new Date());
     const id = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(id);
   }, []);
@@ -191,12 +192,12 @@ const Dashboard = ({ data, setRoute }) => {
   const status   = !clock.in ? "out" : clock.out ? "done" : clock.onBreak ? "break" : "in";
   const statusLabel = { out: "Not clocked in", in: "Clocked in", break: "On break", done: "Day complete" }[status];
 
-  // IST time + date
+  // IST time + date — all null-safe until client-side clock ticks in
   const istFmt  = { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false };
-  const istTime = now.toLocaleTimeString("en-US", istFmt);
-  const dayDate = now.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", weekday: "long", month: "long", day: "numeric" }).toUpperCase();
-  const dayNum  = now.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", day: "numeric" });
-  const hourIST = parseInt(now.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false }));
+  const istTime = now ? now.toLocaleTimeString("en-US", istFmt) : "—:—:—";
+  const dayDate = now ? now.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", weekday: "long", month: "long", day: "numeric" }).toUpperCase() : "";
+  const dayNum  = now ? now.toLocaleDateString("en-US", { timeZone: "Asia/Kolkata", day: "numeric" }) : "";
+  const hourIST = now ? parseInt(now.toLocaleTimeString("en-US", { timeZone: "Asia/Kolkata", hour: "2-digit", hour12: false })) : 12;
   const greeting = hourIST < 12 ? "Good morning" : hourIST < 17 ? "Good afternoon" : "Good evening";
 
   // Upcoming holidays (from today forward)
@@ -210,7 +211,7 @@ const Dashboard = ({ data, setRoute }) => {
   const displayTeam = teamToday.length > 0 ? teamToday : data.team;
 
   // Working days in current month (for percentage)
-  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysInMonth = now ? new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() : 30;
 
   return (
     <div>
